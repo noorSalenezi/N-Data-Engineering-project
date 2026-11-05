@@ -14,7 +14,6 @@ Incremental demo: --reset --as-of 2026-09-27, then the same again without --rese
 then no flags (only payments and events after 27 Sep arrive).
 """
 
-from __future__ import annotations
 
 import argparse
 import os
