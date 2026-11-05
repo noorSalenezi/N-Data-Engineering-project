@@ -1,0 +1,40 @@
+name: qafila
+version: "1.0.0"
+config-version: 2
+profile: qafila
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  qafila:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: view
+    marts:
+      +schema: marts
+      +materialized: table
+    quarantine:
+      +schema: quarantine
+      +materialized: table
+    serve:                       # role-based views: what each audience may read
+      +materialized: view
+      support_customers:
+        +schema: support
+      analyst_customers:
+        +schema: analyst
+
+seeds:
+  qafila:
+    +schema: reference
+
+vars:
+  sla_minutes: 30          # Qafila's delivery promise
+  unknown_key: -1          # dimension member for missing / erased references

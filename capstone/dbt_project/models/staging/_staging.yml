@@ -1,0 +1,157 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: One row per customer account. Contains personal data; restricted.
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+      - name: person_id
+        description: Oldest customer_id with the same person_token (links duplicate accounts).
+        data_tests: [not_null]
+      - name: person_token
+        description: Keyed HMAC of the national ID. The ID itself never reaches the warehouse.
+        data_tests: [not_null]
+      - name: mobile_e164
+        description: Mobile number normalized to +9665XXXXXXXX; NULL if unrecognisable.
+
+  - name: stg_orders
+    description: One row per order, timestamps in UTC and Riyadh time.
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [placed, delivered, cancelled, refunded, failed_delivery]
+      - name: store_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_stores')
+                field: store_id
+      - name: customer_id
+        description: >
+          Orders of customers erased under PDPL point to a customer row that no longer exists. The test
+          warns (it finds them every run, by design); the marts map them to the unknown member (-1).
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+              config:
+                severity: warn
+
+  - name: stg_order_items
+    columns:
+      - name: order_line_id
+        data_tests: [unique, not_null]
+      - name: quantity
+        description: Units ordered. A few source rows are negative (see qrn_order_items).
+        data_tests:
+          - positive:
+              config:
+                severity: warn
+
+  - name: stg_products
+    columns:
+      - name: product_id
+        data_tests: [unique, not_null]
+      - name: sku
+        data_tests: [unique]
+
+  - name: stg_stores
+    columns:
+      - name: store_id
+        data_tests: [unique, not_null]
+
+  - name: stg_payments
+    description: Valid payment attempts only; rows that break the contract are in qrn_payments.
+    columns:
+      - name: payment_id
+        data_tests: [unique, not_null]
+      - name: amount
+        data_tests: [not_null, positive]
+      - name: status
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [captured, failed, refunded]
+      - name: method
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [card, apple_pay, wallet]
+
+  - name: qrn_payments
+    description: Payment rows that break the provider's contract, with reject_reason. Owner empties it with the provider.
+    columns:
+      - name: reject_reason
+        data_tests: [not_null]
+
+  - name: stg_delivery_events
+    description: One row per courier event, deduplicated on event_id, device time parsed to UTC.
+    columns:
+      - name: event_id
+        data_tests: [unique, not_null]
+      - name: event_at_utc
+        data_tests: [not_null]
+      - name: event_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [assigned, picked_up, out_for_delivery, delivered, failed, cancelled]
+
+  - name: stg_supplier_prices
+    columns:
+      - name: unit_cost_sar
+        description: Parsed from unit_cost or cost_sar; decimal commas and Arabic-Indic digits handled.
+        data_tests:
+          - not_null
+          - positive:
+              config:
+                severity: warn
+
+unit_tests:
+  - name: test_device_time_formats_are_parsed_to_utc
+    description: The courier app sends ISO with +03:00, ISO with Z, and epoch milliseconds.
+    model: stg_delivery_events
+    given:
+      - input: source('raw', 'delivery_events')
+        rows:
+          - {event_id: e1, event_time: "2026-09-24T05:14:52.016+03:00", ingest_time: "2026-09-24T02:14:57.000Z"}
+          - {event_id: e2, event_time: "2026-09-24T02:14:52.016Z", ingest_time: "2026-09-24T02:14:57.000Z"}
+          - {event_id: e3, event_time: "1790216092016", ingest_time: "2026-09-24T02:14:57.000Z"}
+    expect:
+      rows:
+        - {event_id: e1, event_at_utc: "2026-09-24 02:14:52.016"}
+        - {event_id: e2, event_at_utc: "2026-09-24 02:14:52.016"}
+        - {event_id: e3, event_at_utc: "2026-09-24 02:14:52.016"}
+
+  - name: test_redelivered_events_are_dropped
+    model: stg_delivery_events
+    given:
+      - input: source('raw', 'delivery_events')
+        rows:
+          - {event_id: e1, event_time: "2026-09-24T02:14:52.016Z", ingest_time: "2026-09-24T02:14:57.000Z"}
+          - {event_id: e1, event_time: "2026-09-24T02:14:52.016Z", ingest_time: "2026-09-24T02:15:40.000Z"}
+    expect:
+      rows:
+        - {event_id: e1, ingest_delay_s: 5}   # datediff counts second boundaries crossed
+
+  - name: test_supplier_costs_are_parsed
+    model: stg_supplier_prices
+    given:
+      - input: source('raw', 'supplier_prices')
+        rows:
+          - {sku: "QF-1 ", unit_cost: "9.49", cost_sar: null, filename: "prices_2026-W37.csv"}
+          - {sku: "QF-2", unit_cost: "9,49", cost_sar: null, filename: "prices_2026-W38.csv"}
+          - {sku: "QF-3", unit_cost: "٩٫٤٩", cost_sar: null, filename: "prices_2026-W38.csv"}
+          - {sku: "QF-4", unit_cost: null, cost_sar: "9.49", filename: "prices_2026-W39.csv"}
+    expect:
+      rows:
+        - {sku: QF-1, unit_cost_sar: 9.49, iso_week: 37}
+        - {sku: QF-2, unit_cost_sar: 9.49, iso_week: 38}
+        - {sku: QF-3, unit_cost_sar: 9.49, iso_week: 38}
+        - {sku: QF-4, unit_cost_sar: 9.49, iso_week: 39}

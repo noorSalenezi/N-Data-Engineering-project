@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: support_customers
+    description: Support team's view of live customers. Name in clear; email and mobile masked. Schema support.
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+
+  - name: analyst_customers
+    description: Analysts' view. No direct identifiers; person_token links duplicate accounts. Schema analyst.
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+      - name: person_token
+        data_tests: [not_null]

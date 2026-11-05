@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+data/
+artifacts/
+warehouse/
+*.duckdb
+*.duckdb.wal
+capstone/dbt_project/target/
+capstone/dbt_project/logs/
+capstone/dbt_project/dbt_packages/
+capstone/dbt_project/.user.yml

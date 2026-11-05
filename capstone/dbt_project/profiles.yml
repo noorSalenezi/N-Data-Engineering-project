@@ -1,0 +1,9 @@
+# The labs set QAFILA_DUCKDB to an absolute path (see de_utils.run_dbt).
+qafila:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('QAFILA_DUCKDB', '../warehouse/qafila.duckdb') }}"
+      schema: main
+      threads: 4

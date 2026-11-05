@@ -1,0 +1,128 @@
+version: 2
+
+models:
+  - name: fct_order_items
+    description: >
+      Grain: one row per order line with a positive quantity. Revenue in SAR (net of line discounts,
+      excluding delivery fees). Orders of erased customers point to customer_id = -1.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: order_line_id
+        data_type: bigint
+        constraints: [{type: not_null}]
+        data_tests: [unique]
+      - name: order_id
+        data_type: bigint
+        constraints: [{type: not_null}]
+      - name: line_no
+        data_type: bigint
+      - name: order_date
+        data_type: date
+        description: Riyadh calendar date of the order.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+      - name: customer_id
+        data_type: bigint
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_id
+      - name: store_id
+        data_type: varchar
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_stores')
+                field: store_id
+      - name: product_id
+        data_type: bigint
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_products')
+                field: product_id
+      - name: order_status
+        data_type: varchar
+      - name: payment_method
+        data_type: varchar
+      - name: promo_code
+        data_type: varchar
+      - name: quantity
+        data_type: bigint
+        data_tests: [positive]
+      - name: unit_price
+        data_type: double
+      - name: discount
+        data_type: double
+      - name: gross_amount
+        data_type: double
+      - name: net_amount
+        data_type: double
+      - name: order_updated_at_utc
+        data_type: timestamp
+
+  - name: fct_orders
+    description: Grain = one row per order. Delivery timings only for orders in the event stream (last 7 days).
+    columns:
+      - name: order_id
+        data_tests: [unique, not_null]
+      - name: customer_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_id
+
+  - name: dim_customers
+    description: Customer accounts without direct identifiers, plus the unknown member (-1).
+    columns:
+      - name: customer_id
+        data_tests: [unique, not_null]
+
+  - name: dim_products
+    columns:
+      - name: product_id
+        data_tests: [unique, not_null]
+
+  - name: dim_stores
+    columns:
+      - name: store_id
+        data_tests: [unique, not_null]
+
+  - name: dim_date
+    columns:
+      - name: date_day
+        data_tests: [unique, not_null]
+
+  - name: mart_store_delivery_ops
+    description: >
+      Operations view. Grain: one row per store and Riyadh calendar day, for orders in the courier
+      event stream (last 7 days). SLA = delivered within 30 minutes of ordering.
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "order_date || '|' || store_id"
+    columns:
+      - name: store_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_stores')
+                field: store_id
+      - name: orders_tracked
+        data_tests: [positive]
+
+  - name: mart_daily_city_sales
+    description: One row per Riyadh calendar day and city.
+    data_tests:
+      - unique:
+          arguments:
+            column_name: "order_date || '|' || city"

@@ -1,0 +1,5 @@
+promo_code,campaign,discount_pct,free_delivery
+WELCOME10,new customers,10,false
+FREEDEL,free delivery,0,true
+WEEKEND15,weekend offer,15,false
+WATANI26,Saudi National Day 2026,15,false

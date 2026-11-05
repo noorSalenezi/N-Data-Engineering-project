@@ -1,0 +1,29 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Bronze layer, loaded as is from Qafila's sources (Day 1 ingestion).
+    schema: raw
+    loaded_at_field: _loaded_at
+    freshness:
+      warn_after: {count: 1, period: day}
+    tables:
+      - name: customers
+        description: >
+          App database, current state. Pseudonymized at ingestion: national_id is replaced by person_token
+          (keyed HMAC) and iban is dropped; the raw values live only in the PII vault.
+      - name: stores
+      - name: products
+      - name: orders
+      - name: order_items
+      - name: payments
+        description: Payment provider API.
+        loaded_at_field: "updated_at::TIMESTAMP"
+      - name: delivery_events
+        description: Courier app events (JSON lines), device time in three formats.
+        loaded_at_field: "ingest_time::TIMESTAMP"
+      - name: supplier_prices
+        description: Weekly supplier CSV drops, all columns as text.
+        freshness: null
+      - name: reviews
+        freshness: null

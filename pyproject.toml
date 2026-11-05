@@ -1,0 +1,32 @@
+[project]
+name = "modern-data-engineering-labs"
+version = "1.0.0"
+description = "Lab notebooks for the SDAIA Academy Modern Data Engineering bootcamp"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "duckdb>=1.4",
+    "polars>=1.30",
+    "pyarrow>=18",
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "matplotlib>=3.8",
+    "requests>=2.32",
+    "pyyaml>=6.0",
+    "dlt[duckdb]>=1.30",
+    "dbt-core>=1.10",
+    "dbt-duckdb>=1.11",
+    "pyiceberg[sql-sqlite,pyarrow,pyiceberg-core]>=0.12",
+    "pandera[polars]>=0.22",
+    "dagster>=1.10",
+    "dagster-dbt>=0.26",
+    "jupyterlab>=4.2",
+    "ipywidgets>=8.1",
+    "nbconvert>=7.16",
+]
+
+[project.optional-dependencies]
+# Lab 4.2 (Spark). Needs Java 17+ locally; on Colab the lab installs Java 17 itself.
+spark = ["pyspark>=4.0"]
+
+[tool.uv]
+package = false

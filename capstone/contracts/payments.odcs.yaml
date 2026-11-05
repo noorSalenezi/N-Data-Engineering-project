@@ -1,0 +1,121 @@
+# Open Data Contract Standard (ODCS) v3.1: the payment provider's feed, as agreed with Qafila.
+# Lab 4.2 builds and validates this contract; capstone/pipeline.py runs its quality rules as an asset check.
+apiVersion: v3.1.0
+kind: DataContract
+id: urn:datacontract:qafila:payments-feed
+name: Payments feed
+version: 1.0.0
+status: active
+domain: finance
+dataProduct: payments
+description:
+  purpose: Every payment attempt for Qafila orders, as captured by the payment provider.
+  usage: Revenue reconciliation (finance), payment-method analytics, refund monitoring.
+  limitations: Amounts are in SAR including VAT. Card data is limited to the last 4 digits.
+team:
+  - username: payments-provider-integration
+    role: owner
+  - username: qafila-data-platform
+    role: consumer
+support:
+  - channel: "#payments-data"
+    tool: slack
+schema:
+  - name: payments
+    physicalName: payments
+    physicalType: table
+    description: One row per payment attempt (failed attempts are real rows).
+    quality:
+      - id: payments_row_count
+        metric: rowCount
+        mustBeGreaterThan: 1000
+      - id: payments_unique_id
+        metric: duplicateValues
+        arguments:
+          properties: [payment_id]
+        mustBe: 0
+      - id: payments_positive_amount
+        type: sql
+        description: A payment can't be zero or negative; refunds are a status, not a negative amount.
+        query: SELECT count(*) FROM {object} WHERE amount <= 0
+        mustBe: 0
+    properties:
+      - name: payment_id
+        logicalType: string
+        physicalType: VARCHAR
+        primaryKey: true
+        required: true
+        unique: true
+      - name: order_id
+        logicalType: integer
+        physicalType: BIGINT
+        required: true
+      - name: amount
+        logicalType: number
+        physicalType: DOUBLE
+        required: true
+        description: Amount charged in SAR, VAT included.
+      - name: currency
+        logicalType: string
+        physicalType: VARCHAR
+        required: true
+        quality:
+          - metric: invalidValues
+            arguments:
+              validValues: [SAR]
+            mustBe: 0
+      - name: method
+        logicalType: string
+        physicalType: VARCHAR
+        required: true
+        quality:
+          - metric: invalidValues
+            arguments:
+              validValues: [card, apple_pay, wallet]
+            mustBe: 0
+      - name: status
+        logicalType: string
+        physicalType: VARCHAR
+        required: true
+        description: captured, failed or refunded. A refund updates the row and its updated_at.
+        quality:
+          - metric: invalidValues
+            arguments:
+              validValues: [captured, failed, refunded]
+            mustBe: 0
+      - name: card_last4
+        logicalType: string
+        physicalType: VARCHAR
+        classification: restricted
+        description: Last 4 digits of the card; null for wallets.
+        quality:
+          - metric: invalidValues
+            arguments:
+              pattern: '^[0-9]{4}$'
+            mustBe: 0
+      - name: wallet_provider
+        logicalType: string
+        physicalType: VARCHAR
+        description: Added 2026-09-15 (non-breaking, optional).
+      - name: created_at
+        logicalType: string
+        physicalType: VARCHAR
+        required: true
+        description: ISO-8601 UTC timestamp.
+        quality:
+          - metric: invalidValues
+            arguments:
+              pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+            mustBe: 0
+      - name: updated_at
+        logicalType: string
+        physicalType: VARCHAR
+        required: true
+slaProperties:
+  - property: latency
+    value: 1
+    unit: d
+    element: payments.updated_at
+  - property: frequency
+    value: 1
+    unit: d
