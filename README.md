@@ -1,6 +1,6 @@
 # Qafila Lakehouse
 
-**Team:** Noor Alenezi, <teammate> · **Option:** 1 · **Run it:** `uv run python capstone/pipeline.py`
+By: Noor Alenezi, @SADAIAAcademy· **Run it:** `uv run python capstone/pipeline.py`
 
 ## Problem
 Qafila's operations and finance teams look at the same numbers every morning: how much each city sold, and whether couriers kept the 30-minute promise. Today those numbers come from five sources with known problems (duplicate accounts, erased customers, a payments feed that changes shape, phones that resend events), and the customer data includes national IDs that must not spread.
