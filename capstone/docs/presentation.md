@@ -7,7 +7,7 @@
 2. **The platform map** — the course's map (sources → ingest → store → transform → test → serve; orchestrate, observe, govern). For each stage: our tool and why (README, Architecture table).
 3. **Sources and what was wrong with them** — the Sources table; highlight 1,040 erased-customer orders, 312 resent events, 16 bad payments, the 15 Sep schema change.
 4. **Model and grain** — the star (fct_order_items, fct_orders + 4 dims), the two marts, one line of grain each. Why fees are not on lines (14% overstatement).
-5. **Trust** — two blocking gates, the contract, 60+ dbt tests, quarantine. The real problem found: erased customers → unknown member.
+5. **Trust** — two blocking gates, the contract, 64 dbt tests (87 pass, 4 warn, 0 errors), quarantine. The real problem found: erased customers → unknown member.
 6. **Privacy** — HMAC tokens vs plain hash, the vault, support vs analyst views, the erasure path.
 7. **What we'd do next** — CDC for the app tables, streaming SLA alerts, grants instead of schema conventions.
 
@@ -19,7 +19,7 @@ Point at: payments 39,689 · events 13,506 · cursors printed at the end.
 ```bash
 uv run python capstone/pipeline.py --as-of 2026-09-27
 ```
-"Same day, re-run: 1 boundary payment re-fetched and upserted, 0 events, the tables are unchanged."
+"Same day, re-run: still 39,689 payments and 13,506 events. Nothing duplicated."
 ```bash
 uv run python capstone/pipeline.py
 ```

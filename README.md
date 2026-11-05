@@ -5,7 +5,7 @@ By: Noor Alenezi, @SADAIAAcademy· **Run it:** `uv run python capstone/pipeline.
 ## Problem
 Qafila's operations and finance teams look at the same numbers every morning: how much each city sold, and whether couriers kept the 30-minute promise. Today those numbers come from five sources with known problems (duplicate accounts, erased customers, a payments feed that changes shape, phones that resend events), and the customer data includes national IDs that must not spread.
 
-**Our platform takes** the app database, the payment provider's API, courier events and supplier/review files **and produces** a star schema, a daily city sales mart and a per-store delivery operations view (both published to Iceberg), **refreshed** nightly at 01:30 Riyadh time, **trusted because** of 60+ dbt tests, a data contract, two blocking gates (privacy and payments quarantine), a volume monitor and an SLA alert.
+**Our platform takes** the app database, the payment provider's API, courier events and supplier/review files **and produces** a star schema, a daily city sales mart and a per-store delivery operations view (both published to Iceberg), **refreshed** nightly at 01:30 Riyadh time, **trusted because** of 64 dbt tests, a data contract, two blocking gates (privacy and payments quarantine), a volume monitor and an SLA alert.
 
 ## Sources
 | Source | Type | Volume | Refresh | Load strategy | Known issues |
@@ -88,18 +88,33 @@ Decisions worth defending:
 | Payments data contract (ODCS) | Dagster asset check | warn | **16 non-positive amounts** |
 | `stg_orders.customer_id` → `stg_customers` | dbt relationships | warn | **1,040 orders of PDPL-erased customers** → mapped to `-1` in marts |
 | `stg_order_items.quantity` positive | dbt custom generic test | warn → quarantine | **142 negative lines** → `qrn_order_items` |
-| Order total = captured payment | dbt singular test | warn | orders whose payment doesn't match (finance follow-up) |
+| Order total = captured payment | dbt singular test | warn | **244 delivered orders** whose captured amount differs from the order total (finance follow-up) |
 | Payments quarantined < 1% | dbt singular test | error | — |
 | No identifier columns in `marts` / `analyst` | dbt singular test | error | — |
 | Events not received before they happen | dbt singular test | error | — (validates the three timestamp parsers) |
 | Delivery time between 0 and 180 min | dbt singular test | error | — |
 | SLA rates between 0 and 1 | dbt singular test | error | — |
 | Unique / not null / accepted values / relationships | dbt generic tests on every model | error | — |
+| Supplier cost positive | dbt custom generic test | warn | **4 zero/negative costs** in the week-39 file |
 | Unit tests: 3 timestamp formats, resent events, supplier number formats | dbt unit tests | error | — |
 | Order volume vs. same weekday's 4-week median | Dagster asset check | warn | nothing in Aug–Sep (lowest day stays above 70%); it guards against a partial load |
-| Store SLA alert: latest day under 50% on time | Dagster asset check | warn | **RUH-01 (Olaya)**: about 35–42% on time every day, the busiest store |
+| Store SLA alert: latest day under 50% on time | Dagster asset check | warn | **RUH-01 (Olaya)**: 39% on time on 30 Sep (35–42% every day), the busiest store |
 
 At least one real problem found: **1,040 orders belong to customers who were erased under PDPL.** The relationships test finds them on every run; instead of dropping the sales (and understating revenue) the facts map them to an "unknown" customer member, so revenue stays complete and no personal data is resurrected.
+
+## Results (latest run)
+`dbt build`: 91 nodes (23 models, 64 tests, 3 unit tests, 1 seed): **87 pass, 4 warn, 0 errors**. Dagster: 35 assets, 66 checks.
+
+| Table | Rows |
+|---|---|
+| `raw.payments` | 41,785 |
+| `raw.delivery_events` | 22,518 (312 resent by phones, dropped in staging) |
+| `marts.fct_orders` | 45,766 |
+| `marts.fct_order_items` | 172,403 (172,545 lines − 142 negative quantities) |
+| `marts.mart_daily_city_sales` | 183 (61 days × 3 cities) |
+| `marts.mart_store_delivery_ops` | 84 (7 days × 12 stores) |
+| `quarantine.qrn_payments` | 16 |
+| `quarantine.qrn_order_items` | 142 |
 
 ## Incremental loads and re-runs
 | Source | Key | Cursor | Look-back | Atomicity |
@@ -115,7 +130,7 @@ Every batch from the API is also written to `artifacts/capstone/landing/payments
 **Evidence (live demo):**
 ```bash
 uv run python capstone/pipeline.py --reset --as-of 2026-09-27   # payments 39,689 | events 13,506
-uv run python capstone/pipeline.py --as-of 2026-09-27           # payments: 1 boundary row re-fetched, still 39,689 | events: 0 new
+uv run python capstone/pipeline.py --as-of 2026-09-27           # re-run: still 39,689 | 13,506 — nothing duplicated
 uv run python capstone/pipeline.py                              # payments: +2,152 fetched (2,096 new, 56 refunds updated) -> 41,785 | events: +9,012 -> 22,518
 ```
 
