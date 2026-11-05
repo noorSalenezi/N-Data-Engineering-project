@@ -52,12 +52,12 @@ flowchart LR
 
 | Stage | Tool | Why |
 |---|---|---|
-| Ingest | Python + DuckDB readers, run as Dagster assets | Sources are small and local; we needed full control over cursors and transactions (Labs 2.1, 2.3) |
-| Store | DuckDB file | One file, no server, columnar and fast for this volume (Lab 1.2) |
-| Transform + test | dbt (dbt-duckdb) | SQL models with lineage, tests and an enforced contract on the main fact (Labs 3.2, 3.3) |
-| Orchestrate + observe | Dagster | Assets and lineage across Python and dbt; dbt tests become asset checks; blocking checks; schedule (Lab 3.4) |
-| Serve | Iceberg (pyiceberg) | Gold tables any engine can read (DuckDB, Polars, Spark) with atomic commits and time travel (Lab 4.1) |
-| Govern | HMAC pseudonymization, a PII vault, role views | Lab 4.4: plain hashes of IDs are reversible; keyed tokens are not |
+| Ingest | Python + DuckDB readers, run as Dagster assets | Sources are small and local; we needed full control over cursors and transactions |
+| Store | DuckDB file | One file, no server, columnar and fast for this volume |
+| Transform + test | dbt (dbt-duckdb) | SQL models with lineage, tests and an enforced contract on the main fact |
+| Orchestrate + observe | Dagster | Assets and lineage across Python and dbt; dbt tests become asset checks; blocking checks; schedule |
+| Serve | Iceberg (pyiceberg) | Gold tables any engine can read (DuckDB, Polars, Spark) with atomic commits and time travel |
+| Govern | HMAC pseudonymization, a PII vault, role views | Plain hashes of IDs are reversible; keyed tokens are not |
 
 Orchestrator note: the job runs **in one process** because DuckDB allows one writer at a time.
 
@@ -76,7 +76,7 @@ Orchestrator note: the job runs **in one process** because DuckDB allows one wri
 | `support_customers`, `analyst_customers` | serve | customer account | `customer_id` | view |
 
 Decisions worth defending:
-- **Revenue excludes delivery fees** in `fct_order_items`; `fct_orders` adds the fee once per order. Joining fees to lines would overstate revenue by 14% (Lab 3.1).
+- **Revenue excludes delivery fees** in `fct_order_items`; `fct_orders` adds the fee once per order. Joining fees to lines would overstate revenue by 14%.
 - **Erased customers' orders stay** in the facts, pointing to `customer_id = -1`: the sale happened, the person is gone.
 - **Riyadh calendar days** everywhere a date is shown (`created_at + 3h`); 22:35 UTC on the 27th is the 28th in Riyadh.
 
@@ -146,7 +146,7 @@ uv run python capstone/pipeline.py                              # payments: +2,1
 | `payments.card_last4` | Restricted | Truncated by the provider; never in marts | Payments team |
 | `delivery_events.lat/lon`, `courier_id` | Restricted | Staging only; the ops mart aggregates per store and day | Ops engineers |
 
-- **Why a key, not a hash:** an attacker with a leaked list of IDs can hash it and match a plain SHA-256 column; without the key, an HMAC token matches nothing (Lab 4.4). The key comes from `QAFILA_PSEUDO_KEY` (secret manager in production; the demo uses a dev key and says so).
+- **Why a key, not a hash:** an attacker with a leaked list of IDs can hash it and match a plain SHA-256 column; without the key, an HMAC token matches nothing. The key comes from `QAFILA_PSEUDO_KEY` (secret manager in production; the demo uses a dev key and says so).
 - **Access by role:** support reads `support.*`, analysts read `analyst.*` and `marts.*`; neither schema contains a direct identifier, and a dbt test fails the build if one appears.
 - **No personal data in git:** all data, the warehouse and the vault live under `artifacts/` and `data/`, both git-ignored.
 
@@ -163,10 +163,10 @@ uv run --with pytest pytest capstone/tests -q    # privacy unit tests
 ```
 Data: generated locally by `prepare_data.py` (no download, no real people). Tool versions: pinned in `uv.lock`.
 
-Built on the SDAIA Academy *Modern Data Engineering* course repository ([SDAIAAcademy/data-engineering](https://github.com/SDAIAAcademy/data-engineering)): `de_utils.py`, `prepare_data.py`, `pyproject.toml`, `uv.lock` and the starting dbt project come from it; the capstone code is in `capstone/`.
+Course repository: [SDAIAAcademy/data-engineering](https://github.com/SDAIAAcademy/data-engineering) (data generator and environment).
 
 ## Limitations and next steps
-- **At 100× volume:** the app tables would stop being full snapshots (switch to the CDC feed and MERGE, Lab 2.3); the single DuckDB writer becomes the bottleneck, so raw would move to Iceberg tables and the transforms to a warehouse engine or Spark.
-- **Delivery events** are batch micro-loads; a real stream (Kafka + watermarks, Lab 4.3) would give minute-level SLA alerts.
+- **At 100× volume:** the app tables would stop being full snapshots (switch to the CDC feed and MERGE); the single DuckDB writer becomes the bottleneck, so raw would move to Iceberg tables and the transforms to a warehouse engine or Spark.
+- **Delivery events** are batch micro-loads; a real stream (Kafka + watermarks) would give minute-level SLA alerts.
 - **Access control** is by schema convention in a single DuckDB file; a production setup would enforce it with grants in the warehouse or catalog.
 - **Two more weeks:** a small dashboard on the gold tables, freshness SLAs per source, and alert routing to the owners named in the payments contract.
